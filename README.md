@@ -1,7 +1,5 @@
 # CompletableFutureExample
 some of CompletableFuture examples help me understand it
-
-Trying to understand some of behaviors of CompletableFuture
  
    the execution order conclusions:
    
