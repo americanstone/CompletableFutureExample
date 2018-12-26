@@ -9,3 +9,5 @@ some of CompletableFuture examples help me understand it
    which non-Async can be executed in main thread potentially can block the main thread.
    block or not depends on non-Async's previous stage completed or not
    if completed, non-Async task is executed in main thread, otherwise in previous stage thread
+   
+   always use async
