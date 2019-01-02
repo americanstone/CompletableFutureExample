@@ -5,6 +5,10 @@ public class Vehicle {
 	int year;
 	float rating;
 
+	public Vehicle(int id) {
+		this.id = id;
+	}
+
 	public Vehicle(int id, int manufacturerId, String model, int year) {
 		this.id = id;
 		this.manufacturerId = manufacturerId;

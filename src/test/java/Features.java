@@ -5,10 +5,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.*;
@@ -453,7 +455,93 @@ public class Features {
 		assertTrue("Result was empty", result.length() > 0);
 	}
 
+	@Test
+	public void completeAfterCompletionExample(){
+		ExecutorService executor = Executors.newCachedThreadPool();
+		Supplier<String> supplier = () -> {
 
+			try {
+				Thread.sleep(500);
+			} catch(InterruptedException e) {
+				e.printStackTrace();
+			}
+
+			return Thread.currentThread().getName();
+		};
+
+		CompletableFuture<String> cf = CompletableFuture.supplyAsync(supplier, executor);
+		String result = cf.join();
+
+		System.out.println("Running " + result);
+
+		cf.complete("Tool long"); // doesn't change the value if CompletableFuture is completed.
+
+		String result2 = cf.join();
+
+		System.out.println("Running " + result2);
+
+		executor.shutdown();
+	}
+
+	@Test
+	public void completeBeforeCompletionExample(){
+		ExecutorService executor = Executors.newCachedThreadPool();
+		Supplier<String> supplier = () -> {
+
+			try {
+				Thread.sleep(500);
+			} catch(InterruptedException e) {
+				e.printStackTrace();
+			}
+
+			return Thread.currentThread().getName();
+		};
+
+		CompletableFuture<String> cf = CompletableFuture.supplyAsync(supplier, executor);
+
+		cf.complete("Tool long");
+
+
+		String result = cf.join();
+
+		System.out.println("Running " + result);
+
+
+		String result2 = cf.join();
+
+		System.out.println("Running " + result2);
+
+		executor.shutdown();
+	}
+
+	@Test
+	public void obtrudeValueExample(){
+		ExecutorService executor = Executors.newCachedThreadPool();
+		Supplier<String> supplier = () -> {
+
+			try {
+				Thread.sleep(500);
+			} catch(InterruptedException e) {
+				e.printStackTrace();
+			}
+
+			return Thread.currentThread().getName();
+		};
+
+		CompletableFuture<String> cf = CompletableFuture.supplyAsync(supplier, executor);
+
+		String result = cf.join();
+
+		System.out.println("Running " + result);
+
+		cf.obtrudeValue("Tool long");
+
+		String result2 = cf.join();
+
+		System.out.println("Running " + result2);
+
+		executor.shutdown();
+	}
 
 	private  boolean isUpperCase(String s) {
 		for (int i = 0; i < s.length(); i++) {
