@@ -1,5 +1,5 @@
 # CompletableFutureExample
-some of CompletableFuture examples help me understand it
+my CompletableFuture playground to help me understand the chain and execution order
  
    the execution order conclusions:
    

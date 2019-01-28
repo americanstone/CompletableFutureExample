@@ -31,7 +31,7 @@ import static org.junit.Assert.*;
 
 
 
-public class Features {
+public class CompletedFuturePlaygroud {
 	 ExecutorService executor = Executors.newFixedThreadPool(3, new ThreadFactory() {
 		int count = 1;
 		@Override
