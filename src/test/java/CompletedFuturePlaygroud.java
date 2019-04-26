@@ -4,15 +4,19 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static java.util.concurrent.CompletableFuture.supplyAsync;
 import static org.junit.Assert.*;
 
 /**
@@ -69,9 +73,10 @@ public class CompletedFuturePlaygroud {
 							assertEquals("main", Thread.currentThread().getName());
 
 							assertFalse(Thread.currentThread().isDaemon());
+					System.out.println(Thread.currentThread().getName() + " inner");
 							return s.toUpperCase();
 				});
-		System.out.println(Thread.currentThread().getName());
+		System.out.println(Thread.currentThread().getName() + " outer");
 		assertTrue(cf.isDone());
 		assertEquals("MESSAGE", cf.getNow(null));
 	}
@@ -97,7 +102,7 @@ public class CompletedFuturePlaygroud {
 	// example2 vs example3
 	@Test
 	public void thenApplyExample2(){
-		CompletableFuture<String> cf = CompletableFuture.supplyAsync(() -> {
+		CompletableFuture<String> cf = supplyAsync(() -> {
 			// completed before next stage
 			System.out.println(Thread.currentThread().getName());
 			return "message";
@@ -114,7 +119,7 @@ public class CompletedFuturePlaygroud {
 
 	@Test
 	public void thenApplyExample3(){
-		CompletableFuture<String> cf = CompletableFuture.supplyAsync(() -> {
+		CompletableFuture<String> cf = supplyAsync(() -> {
 
 			randomSleep();
 			System.out.println(Thread.currentThread().getName());
@@ -136,7 +141,7 @@ public class CompletedFuturePlaygroud {
 	//  otherwise, it run in main thread (thenApplyAsyncSyncMixExample)
 	@Test
 	public void thenApplyAsyncSyncMixExample(){
-		CompletableFuture<Void> cf = CompletableFuture.supplyAsync(() -> {
+		CompletableFuture<Void> cf = supplyAsync(() -> {
 			System.out.println(Thread.currentThread().getName());
 			return "message";
 		}).thenApplyAsync(s -> {
@@ -161,7 +166,7 @@ public class CompletedFuturePlaygroud {
 
 	@Test
 	public void if_previous_stage_completed_thenApplyAsync_chain_executed_in_same_pool_thread(){
-		CompletableFuture<String> cf = CompletableFuture.supplyAsync(() ->
+		CompletableFuture<String> cf = supplyAsync(() ->
 
 				Thread.currentThread().getName()
 
@@ -186,25 +191,53 @@ public class CompletedFuturePlaygroud {
 	// the main thread and pool threads execution order is not guaranteed in *Async
 	@Test
 	public void thenApplyAsyncExample4(){
-		CompletableFuture<Void> cf = CompletableFuture.supplyAsync(() -> {
-			System.out.println(Thread.currentThread().getName());
+		CompletableFuture<Void> cf = supplyAsync(() -> {
+			assertNotEquals("main", Thread.currentThread().getName());
 			return "message";
 		}).thenApplyAsync(s -> {
-			System.out.println(Thread.currentThread().getName());
+
 			randomSleep();
+			
+			assertNotEquals("main", Thread.currentThread().getName());
+
 			return s.toUpperCase();
 		}).thenAccept(y -> {
-			System.out.println(Thread.currentThread().getName());
+			// previous stage hasn't completed
+			assertNotEquals("main", Thread.currentThread().getName());
+
 		});
 
-		System.out.println("main thread!");
+		System.out.println("main thread completed first!");
 		assertFalse(cf.isDone());
 		System.out.println(cf.join());
 	}
 
 	@Test
+	public void thenApplyAsyncExample4_5(){
+		CompletableFuture<Void> cf = supplyAsync(() -> {
+			assertNotEquals("main", Thread.currentThread().getName());
+			return "message";
+		}).thenApplyAsync(s -> {
+
+			// previous stage completed
+
+			assertNotEquals("main", Thread.currentThread().getName());
+
+			return s.toUpperCase();
+		}).thenAccept(y -> {
+
+			assertEquals("main", Thread.currentThread().getName());
+
+		});
+
+		System.out.println("main thread completed first!");
+		assertTrue(cf.isDone());
+		System.out.println(cf.join());
+	}
+
+	@Test
 	public void thenApplyAsyncExample5(){
-		CompletableFuture<Void> cf = CompletableFuture.supplyAsync(() -> {
+		CompletableFuture<Void> cf = supplyAsync(() -> {
 			System.out.println(Thread.currentThread().getName() + " supplyAsync");
 			return "message";
 		}).thenApplyAsync(s -> {
@@ -224,7 +257,7 @@ public class CompletedFuturePlaygroud {
 	// execution order is kind of random(thenApplyExample3)
 	@Test
 	public void thenApplyAsyncExample6(){
-		CompletableFuture<String> cf = CompletableFuture.supplyAsync(() -> {
+		CompletableFuture<String> cf = supplyAsync(() -> {
 			randomSleep();
 			System.out.println(Thread.currentThread().getName());
 
@@ -246,7 +279,7 @@ public class CompletedFuturePlaygroud {
 
 	@Test
 	public void thenApplyAsyncExample7(){
-		CompletableFuture<Void> cf = CompletableFuture.supplyAsync(() -> {
+		CompletableFuture<Void> cf = supplyAsync(() -> {
 			System.out.println(Thread.currentThread().getName() + " first");
 			randomSleep();
 			randomSleep();
@@ -270,7 +303,7 @@ public class CompletedFuturePlaygroud {
 	// should nested Async?
 	@Test
 	public void thenApplyAsyncExample8(){
-		CompletableFuture<Void> cf = CompletableFuture.supplyAsync(() -> {
+		CompletableFuture<Void> cf = supplyAsync(() -> {
 			System.out.println(Thread.currentThread().getName());
 			return "message";
 		}).thenApplyAsync(s -> {
@@ -314,7 +347,7 @@ public class CompletedFuturePlaygroud {
 				});
 		System.out.println(Thread.currentThread().getName());
 		assertTrue(cf.isDone());
-		assertTrue("Result was empty", result.length() > 0);
+		assertTrue("Result was not empty", result.length() > 0);
 	}
 
 
@@ -324,40 +357,59 @@ public class CompletedFuturePlaygroud {
 		CompletableFuture<Void> cf = CompletableFuture.completedFuture("thenAcceptAsync message")
 				.thenAcceptAsync(s -> result.append(s));
 		cf.join();
-		assertTrue("Result was empty", result.length() > 0);
+		assertTrue("Result was not empty", result.length() > 0);
 	}
 
 	@Test
 	public void cancelExample() {
-		CompletableFuture<String> cf = CompletableFuture.completedFuture("message")
+		CompletableFuture<String> delayedAction = CompletableFuture.completedFuture("message")
 				.thenApplyAsync(String::toUpperCase,
 				CompletableFuture.delayedExecutor(1, TimeUnit.SECONDS));
-		CompletableFuture<String> cf2 = cf.exceptionally(throwable -> "canceled message");
-		assertTrue("Was not canceled", cf.cancel(true));
-		assertTrue("Was not completed exceptionally", cf.isCompletedExceptionally());
+
+		CompletableFuture<String> cf2 = delayedAction.exceptionally(throwable -> "canceled message");
+
+		assertTrue("Was not canceled", delayedAction.cancel(true));
+
+		assertTrue("Was not completed exceptionally", delayedAction.isCompletedExceptionally());
+
 		assertEquals("canceled message", cf2.join());
 	}
 
 	@Test
 	public void applyToEitherExample() {
 		String original = "Message";
-		CompletableFuture<String> cf1 = CompletableFuture.completedFuture(original)
+		CompletableFuture<String> delayedUpperCase = CompletableFuture.completedFuture(original)
 				.thenApplyAsync(s -> delayedUpperCase(s));
-		CompletableFuture<String> cf2 = cf1.applyToEither(
-				CompletableFuture.completedFuture(original).thenApplyAsync(s -> delayedLowerCase(s)),
-				s -> s + " from applyToEither");
-		assertTrue(cf2.join().endsWith(" from applyToEither"));
+
+		CompletableFuture<String> delayedLowerCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedLowerCase(s));
+
+		CompletableFuture<String> either = delayedUpperCase.applyToEither(
+											delayedLowerCase,
+											s -> s + " from applyToEither");
+		String result = either.join();
+		System.out.println("result " + result);
+		assertTrue(result.endsWith(" from applyToEither"));
 	}
 
 	@Test
 	public void acceptEitherExample() {
 		String original = "Message";
+		CompletableFuture<String> delayedUpperCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedUpperCase(s));
+
+		CompletableFuture<String> delayedLowerCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedLowerCase(s));
+
 		StringBuilder result = new StringBuilder();
-		CompletableFuture<Void> cf = CompletableFuture.completedFuture(original)
-				.thenApplyAsync(s -> delayedUpperCase(s))
-				.acceptEither(CompletableFuture.completedFuture(original).thenApplyAsync(s -> delayedLowerCase(s)),
-						s -> result.append(s).append("acceptEither"));
+
+		CompletableFuture<Void> cf = delayedUpperCase.acceptEither(
+										delayedLowerCase,
+										s -> result.append(s).append("acceptEither")
+		);
+		
 		cf.join();
+		System.out.println();
 		assertTrue("Result was empty", result.toString().endsWith("acceptEither"));
 	}
 	@Test
@@ -469,7 +521,7 @@ public class CompletedFuturePlaygroud {
 			return Thread.currentThread().getName();
 		};
 
-		CompletableFuture<String> cf = CompletableFuture.supplyAsync(supplier, executor);
+		CompletableFuture<String> cf = supplyAsync(supplier, executor);
 		String result = cf.join();
 
 		System.out.println("Running " + result);
@@ -497,7 +549,7 @@ public class CompletedFuturePlaygroud {
 			return Thread.currentThread().getName();
 		};
 
-		CompletableFuture<String> cf = CompletableFuture.supplyAsync(supplier, executor);
+		CompletableFuture<String> cf = supplyAsync(supplier, executor);
 
 		cf.complete("Tool long");
 
@@ -528,7 +580,7 @@ public class CompletedFuturePlaygroud {
 			return Thread.currentThread().getName();
 		};
 
-		CompletableFuture<String> cf = CompletableFuture.supplyAsync(supplier, executor);
+		CompletableFuture<String> cf = supplyAsync(supplier, executor);
 
 		String result = cf.join();
 
@@ -543,6 +595,65 @@ public class CompletedFuturePlaygroud {
 		executor.shutdown();
 	}
 
+	@Test
+	public void Two_to_One_Selecting_Patterns(){
+		CompletableFuture<String> cf1 = supplyAsync(blocked(String.class));
+		CompletableFuture<String> cf2 = supplyAsync(returnValueLater("bar"));
+		CompletableFuture<String> cf3 = supplyAsync(blocked(String.class));
+		CompletableFuture<String> cf4 = supplyAsync(returnValue("foo"));
+
+		CompletableFuture<String> upstreams = cf1
+				.applyToEither(cf2, Function.identity())
+				.applyToEither(cf3, Function.identity())
+				.applyToEither(cf4, Function.identity());
+
+		upstreams.thenAccept(System.out::println).join();// print "foo"
+
+
+	}
+	@Test
+	public void Two_to_One_Selecting_Patterns2() throws InterruptedException {
+		CompletableFuture<String> cf1 = supplyAsync(blocked(String.class));
+		CompletableFuture<String> cf2 = supplyAsync(returnValueLater("bar"));
+		CompletableFuture<String> cf3 = supplyAsync(blocked(String.class));
+		CompletableFuture<String> cf4 = supplyAsync(returnValue("foo"));
+		//the first upstream is always blocked.
+		//Creates a new incomplete CompletableFuture
+		CompletableFuture<String> blocked = new CompletableFuture<>();
+		CompletableFuture<String> upstreams = Stream.of(cf1, cf2, cf3, cf4).reduce(blocked,
+				(it, upstream) -> it.applyToEither(upstream, Function.identity()));
+
+		upstreams.thenAccept(System.out::println).join();// print "foo"
+	}
+
+	
+	private <T> Supplier<T> returnValue(T value) {
+		return returnValue(() -> value);
+	}
+
+	//block forever
+	private <T> Supplier<T> blocked(Class<T> type) {
+		return returnValue(() -> {
+			Thread.currentThread().join();
+			return null;
+		});
+	}
+
+	private <T> Supplier<T> returnValueLater(T value) {
+		return returnValue(() -> {
+			Thread.sleep(100);
+			return value;
+		});
+	}
+
+	private <T> Supplier<T> returnValue(Callable<T> value) {
+		return () -> {
+			try {
+				return value.call();
+			} catch (Exception e) { throw new RuntimeException(e); }
+		};
+	}
+	
 	private  boolean isUpperCase(String s) {
 		for (int i = 0; i < s.length(); i++) {
 			if (Character.isLowerCase(s.charAt(i))) {

@@ -17,7 +17,7 @@ public class ExecutionOrder {
 		ExecutorService executor = Executors.newCachedThreadPool();
 
 		Function<List<Integer>, CompletableFuture<List<Vehicle>>> fetchVehicle1 = ids -> {
-			System.out.println("vehicle1 " + Thread.currentThread().getName());
+			System.out.println("fetching vehicle1 blocking 500" + Thread.currentThread().getName());
 			sleep(500);
 
 			Supplier<List<Vehicle>> supplier = () -> ids.stream().map(Vehicle::new).collect(toList());
@@ -26,7 +26,7 @@ public class ExecutionOrder {
 		};
 
 		Function<List<Integer>, CompletableFuture<List<Vehicle>>> fetchVehicle2 = ids -> {
-			System.out.println("vehicle2 " + Thread.currentThread().getName());
+			System.out.println("fetching vehicle2 blocking 500" + Thread.currentThread().getName());
 			sleep(5000);
 
 			Supplier<List<Vehicle>> supplier = () -> ids.stream().map(Vehicle::new).collect(toList());
@@ -44,8 +44,8 @@ public class ExecutionOrder {
 		CompletableFuture<List<Vehicle>> vehicle1 = cf.thenComposeAsync(fetchVehicle1,executor);  // who is executed first?
 		CompletableFuture<List<Vehicle>> vehicle2 = cf.thenComposeAsync(fetchVehicle2, executor);
 
-		vehicle1.thenRun(() -> System.out.println("vehicle1"));
-		vehicle2.thenRun(() -> System.out.println("vehicle2"));
+		vehicle1.thenRun(() -> System.out.println("after fetching vehicle1 then run print"));
+		vehicle2.thenRun(() -> System.out.println("after fetching vehicle2 then run print"));
 
 		// Dependencies among stages control the triggering of computations, but do not otherwise guarantee any particular ordering.
 		vehicle1.acceptEither(vehicle2, displayer);
