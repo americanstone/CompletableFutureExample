@@ -13,34 +13,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 public class CompletableFuturePatternTest {
 
-	@Test
-	@DisplayName("Two-to-One Selecting Pattern")
-	public void selectingManyToOne() throws Throwable {
-		String user = select("select user from User", String.class)
-				.from(availableServers())
-				.getFirstResult();
-
-		assertThat(user, equalTo("Joe"));
+	private <T> CompletableFuture<T> server(Supplier<T> supplier) {
+		return supplyAsync(supplier);
 	}
-
-	@Test @DisplayName("Two-to-One Combining Pattern")
-	public void combiningManyToOne() throws Throwable {
-		List<String> users = select("select user from User", String.class)
-				.from(availableServers())
-				.list();
-
-		assertThat(users, equalTo(asList("Bob", "Joe", "Doe")));
-	}
-
-	@Test @DisplayName("One-to-One Pattern")
-	public void waitUntilUpstreamCompleted() throws Throwable {
-		String user = select("select user from User", String.class)
-				.from(availableServers())
-				.to(String::toUpperCase);
-
-		assertThat(user, equalTo("JOE"));
-	}
-
 	private CompletableFuture<String>[] availableServers() {
 		return new CompletableFuture[]{
 				server(returnValueLater("Bob")),
@@ -48,11 +23,6 @@ public class CompletableFuturePatternTest {
 				server(returnValueLater("Doe")),
 		};
 	}
-
-	private <T> CompletableFuture<T> server(Supplier<T> supplier) {
-		return supplyAsync(supplier);
-	}
-
 	private <T> Supplier<T> returnValue(T value) {
 		return returnValue(() -> value);
 	}
@@ -73,6 +43,31 @@ public class CompletableFuturePatternTest {
 				throw new RuntimeException(e);
 			}
 		};
+	}
+
+	@Test
+	@DisplayName("Two-to-One Selecting Pattern")
+	public void selectingManyToOne() throws Throwable {
+		String user = select("select user from User", String.class)
+				.from(availableServers())
+				.getFirstResult();
+		assertThat(user, equalTo("Joe"));
+	}
+
+	@Test @DisplayName("Two-to-One Combining Pattern")
+	public void combiningManyToOne() throws Throwable {
+		List<String> users = select("select user from User", String.class)
+				.from(availableServers())
+				.list();
+		assertThat(users, equalTo(asList("Bob", "Joe", "Doe")));
+	}
+
+	@Test @DisplayName("One-to-One Pattern")
+	public void waitUntilUpstreamCompleted() throws Throwable {
+		String user = select("select user from User", String.class)
+				.from(availableServers())
+				.to(String::toUpperCase);
+		assertThat(user, equalTo("JOE"));
 	}
 
 	private <T> Query<T> select(String query, Class<T> type) {

@@ -773,6 +773,16 @@ public class CompletedFuturePlaygroud {
 
 		upstreams.thenAccept(System.out::println).join();// print "foo"
 	}
+	@Test
+	public void Two_to_One_Selecting_Patterns3() throws ExecutionException, InterruptedException {
+		CompletableFuture<String> cf1 = supplyAsync(blocked(String.class));
+		CompletableFuture<String> cf2 = supplyAsync(returnValueLater("bar"));
+		CompletableFuture<String> cf3 = supplyAsync(blocked(String.class));
+		CompletableFuture<String> cf4 = supplyAsync(returnValue("foo"));
+		Object result = null;
+		result = CompletableFuture.anyOf(cf1, cf2, cf3, cf4).get();
+	    System.out.println(result);
+	}
 
 	private <T> Supplier<T> returnValue(T value) {
 		return returnValue(() -> value);
