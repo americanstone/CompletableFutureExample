@@ -1,4 +1,3 @@
-import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -6,7 +5,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -17,7 +16,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.concurrent.CompletableFuture.supplyAsync;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  *  Trying to understand some of behaviors of CompletableFuture
@@ -320,7 +323,7 @@ public class CompletedFuturePlaygroud {
 		});
 
 		System.out.println("main thread!");
-		assertFalse(cf.isDone());
+		//assertFalse(cf.isDone());
 		System.out.println(cf.join());
 	}
 
@@ -363,12 +366,20 @@ public class CompletedFuturePlaygroud {
 	@Test
 	public void cancelExample() {
 		CompletableFuture<String> delayedAction = CompletableFuture.completedFuture("message")
-				.thenApplyAsync(String::toUpperCase,
-				CompletableFuture.delayedExecutor(1, TimeUnit.SECONDS));
+				.thenApplyAsync(
+						String::toUpperCase,
+						CompletableFuture.delayedExecutor(1, TimeUnit.SECONDS)
+				);
+//		The exceptionally(Function<Throwable, T> function) call is the simplest one. It returns a CompletionStage that will complete
+//	    normally if the upstream CompletionStage also completes normally. The result returned is the same as the result of the upstream  CompletionStage.
+//		On the other hand, if this upstream CompletionStage raises an exception,
+//		this exception is passed to the provided function. The returned CompletionStage then completes normally returning
+//		the result of the provided function. There is no asynchronous version of this method.
 
 		CompletableFuture<String> cf2 = delayedAction.exceptionally(throwable -> "canceled message");
 
-		assertTrue("Was not canceled", delayedAction.cancel(true));
+		assertTrue("If not already completed, completes this CompletableFuture with a CancellationException",
+				delayedAction.cancel(true));
 
 		assertTrue("Was not completed exceptionally", delayedAction.isCompletedExceptionally());
 
@@ -413,71 +424,212 @@ public class CompletedFuturePlaygroud {
 		assertTrue("Result was empty", result.toString().endsWith("acceptEither"));
 	}
 	@Test
-	public void runAfterBothExample() {
+	public void runAfterBothExample() throws ExecutionException, InterruptedException {
 		String original = "Message";
 		StringBuilder result = new StringBuilder();
-		CompletableFuture.completedFuture(original)
-				.thenApply(String::toUpperCase)
-				.runAfterBoth(
-					CompletableFuture.completedFuture(original).thenApply(String::toLowerCase),
+		CompletableFuture<String> delayedUpperCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedUpperCase(s));
+		CompletableFuture<String> delayedLowerCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedLowerCase(s));
 
+		delayedUpperCase.runAfterBoth(
+						delayedLowerCase,
 						() -> result.append("done")
-				);
+				).get();
 		assertTrue("Result was empty", result.length() > 0);
 	}
+
+
 	@Test
-	public void thenAcceptBothExample() {
+	public void thenAcceptBothExample() throws ExecutionException, InterruptedException {
 		String original = "Message";
 		StringBuilder result = new StringBuilder();
-		CompletableFuture.completedFuture(original)
-				.thenApply(String::toUpperCase)
+		CompletableFuture<String> delayedUpperCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedUpperCase(s));
+		CompletableFuture<String> delayedLowerCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedLowerCase(s));
+
+				delayedUpperCase
 				.thenAcceptBoth(
-					CompletableFuture.completedFuture(original).thenApply(String::toLowerCase),
-					(s1, s2) -> result.append(s1 + s2)
-				);
+						delayedLowerCase,
+						(s1, s2) -> result.append(s1 + s2)
+				).get();
 		assertEquals("MESSAGEmessage", result.toString());
 	}
 
 	@Test
-	public void thenCombineExample() {
+	public void thenCombineExample() throws ExecutionException, InterruptedException {
 		String original = "Message";
-		CompletableFuture<String> cf = CompletableFuture.completedFuture(original).thenApply(s -> delayedUpperCase(s))
-				.thenCombine(CompletableFuture.completedFuture(original).thenApply(s -> delayedLowerCase(s)),
+		CompletableFuture<String> delayedUpperCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedUpperCase(s));
+
+		CompletableFuture<String> delayedLowerCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedLowerCase(s));
+
+
+		CompletableFuture<String> cf = delayedUpperCase
+				.thenCombine(delayedLowerCase,
 						(s1, s2) -> s1 + s2);
+		cf.get();
 		assertEquals("MESSAGEmessage", cf.getNow(null));
 	}
+
 	@Test
 	public void thenCombineAsyncExample() {
 		String original = "Message";
-		CompletableFuture<String> cf = CompletableFuture.completedFuture(original)
-				.thenApplyAsync(s -> delayedUpperCase(s))
-				.thenCombine(CompletableFuture.completedFuture(original).thenApplyAsync(s -> delayedLowerCase(s)),
+		CompletableFuture<String> delayedUpperCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedUpperCase(s));
+
+		CompletableFuture<String> delayedLowerCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedLowerCase(s));
+
+
+		CompletableFuture<String> cf = delayedUpperCase
+				.thenCombine(delayedLowerCase,
 						(s1, s2) -> s1 + s2);
 		assertEquals("MESSAGEmessage", cf.join());
 	}
 	@Test
 	public void thenComposeExample() {
+		/**
+		 * We can also compose the elements instead of chaining them. This makes sense only for tasks that take the result of the
+		 * previous task and provide an object wrapped in another CompletableFuture.
+		 * This is once more a one-to-one relation (not chaining, because this is composition)
+		 */
 		String original = "Message";
-		CompletableFuture<String> cf = CompletableFuture.completedFuture(original).thenApply(s -> delayedUpperCase(s))
-				.thenCompose(upper -> CompletableFuture.completedFuture(original).thenApply(s -> delayedLowerCase(s))
+		CompletableFuture<String> delayedUpperCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedUpperCase(s));
+
+		CompletableFuture<String> delayedLowerCase = CompletableFuture.completedFuture(original)
+				.thenApplyAsync(s -> delayedLowerCase(s));
+
+		CompletableFuture<String> cf = delayedUpperCase.thenCompose(upper -> delayedLowerCase
 						.thenApply(s -> upper + s));
 		assertEquals("MESSAGEmessage", cf.join());
 	}
+
+	/**
+	 *
+	 * anyOfExample vs anyOfExample2
+	 *
+	 *   always block the anyOf CompletableFuture to get the result
+	 */
 	@Test
-	public void anyOfExample() {
+	public void anyOfExample() throws ExecutionException, InterruptedException {
 		StringBuilder result = new StringBuilder();
 		List<String> messages = List.of("a", "b", "c");
-		List<CompletableFuture<String>> futures = messages.stream()
-				.map(msg -> CompletableFuture.completedFuture(msg).thenApply(s -> delayedUpperCase(s)))
+
+		Function<String, CompletableFuture<String>> delayedUpperCase = (msg) -> CompletableFuture.completedFuture(msg)
+				.thenApplyAsync(s -> delayedUpperCase(s));
+
+		List<CompletableFuture<String>> upperCaseFutures = messages.stream()
+				.map(delayedUpperCase)
 				.collect(Collectors.toList());
-		CompletableFuture.anyOf(futures.toArray(new CompletableFuture[futures.size()])).whenComplete((res, th) -> {
+
+		CompletableFuture<Object> any = CompletableFuture.anyOf(
+				upperCaseFutures.toArray(new CompletableFuture[upperCaseFutures.size()])
+		).whenComplete((res, th) -> {
 			if(th == null) {
 				assertTrue(isUpperCase((String) res));
 				result.append(res);
 			}
 		});
+
+		assertFalse(any.isDone());
+
+		any.get();// block until done
+
 		assertTrue("Result was empty", result.length() > 0);
 	}
+
+	@Test
+	public void anyOfExample2() throws ExecutionException, InterruptedException {
+		StringBuilder result = new StringBuilder();
+		List<String> messages = List.of("a", "b", "c");
+		List<CompletableFuture<String>> upperCaseFutures = messages.stream()
+															.map(msg -> CompletableFuture.completedFuture(msg).thenApply(s -> delayedUpperCase(s)))
+															.collect(Collectors.toList());
+
+		CompletableFuture<Object> any = CompletableFuture.anyOf(
+				upperCaseFutures.toArray(new CompletableFuture[upperCaseFutures.size()])
+		).whenComplete((res, th) -> {
+			if(th == null) {
+				assertTrue(isUpperCase((String) res));
+				result.append(res);
+			}
+		});
+
+		assertTrue(any.isDone());
+
+		any.get();//
+		assertTrue("Result was empty", result.length() > 0);
+	}
+
+	@Test
+	public void anyOf_with_condition() throws ExecutionException, InterruptedException {
+		List<String> messages = List.of("a", "b", "c");
+		Function<String, CompletableFuture<String>> delayedUpperCase = (msg) -> CompletableFuture.completedFuture(msg)
+				.thenApplyAsync(s -> delayedUpperCase(s));
+
+		List<CompletableFuture<String>> upperCaseFutures = messages.stream()
+				.map(delayedUpperCase)
+				.collect(Collectors.toList());
+
+		List<CompletableFuture<String>> proxy = upperCaseFutures.stream()
+				.map(upperCaseFuture -> {
+					CompletableFuture<String> futureWithCheck = new CompletableFuture<>();
+					upperCaseFuture.thenAccept(upperCase -> {
+						// incomplete CompletableFuture
+						if(upperCase.equals("B")) {
+							// complete if only if the result equals b
+							futureWithCheck.complete(upperCase);
+						}
+					});
+					
+					return futureWithCheck;
+				})
+				.collect(Collectors.toList());
+
+		// only want to any of CompletableFuture return value equals "b" trigger the whenComplete
+		CompletableFuture<Object> any = CompletableFuture.anyOf(proxy.toArray(new CompletableFuture[proxy.size()]))
+				.whenComplete((res, th) -> {
+					if(th == null) {
+						assertTrue("B".equals((String) res));
+					}
+				});
+		String result =(String) any.get();
+
+		assertEquals("B", result);
+	}
+
+	@Test
+	public void anyOf_with_condition_2() throws ExecutionException, InterruptedException {
+		List<String> messages = List.of("a", "b", "c");
+		Function<String, CompletableFuture<String>> delayedUpperCase = (msg) -> CompletableFuture.completedFuture(msg)
+				.thenApplyAsync(s -> delayedUpperCase(s));
+
+		List<CompletableFuture<String>> upperCaseFutures = messages.stream()
+				.map(delayedUpperCase)
+				.collect(Collectors.toList());
+
+		List<CompletableFuture<String>> proxy = upperCaseFutures
+				.stream()
+				.map(upperCaseFuture -> upperCaseFuture
+										.thenCompose(upperCase -> upperCase.equals("B") ? CompletableFuture.completedFuture(upperCase) : new CompletableFuture<>()))
+				.collect(Collectors.toList());
+
+		// only want to any of CompletableFuture return value equals "b" trigger the whenComplete
+		CompletableFuture<Object> any = CompletableFuture.anyOf(proxy.toArray(new CompletableFuture[proxy.size()]))
+				.whenComplete((res, th) -> {
+					if(th == null) {
+						System.out.println(res);
+						assertTrue("B".equals((String) res));
+					}
+				});
+		String result = (String)any.get();
+		assertEquals("B", result);
+	}
+
 	@Test
 	public void allOfExample() {
 		StringBuilder result = new StringBuilder();
@@ -485,12 +637,17 @@ public class CompletedFuturePlaygroud {
 		List<CompletableFuture<String>> futures = messages.stream()
 				.map(msg -> CompletableFuture.completedFuture(msg).thenApply(s -> delayedUpperCase(s)))
 				.collect(Collectors.toList());
-		CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).whenComplete((v, th) -> {
-			futures.forEach(cf -> assertTrue(isUpperCase(cf.getNow(null))));
-			result.append("done");
-		});
+
+		CompletableFuture
+				.allOf(futures.toArray(new CompletableFuture[futures.size()]))
+				.whenComplete((v, th) -> {
+											futures.forEach(cf -> assertTrue(isUpperCase(cf.getNow(null))));
+											result.append("done");
+				});
+
 		assertTrue("Result was empty", result.length() > 0);
 	}
+
 	@Test
 	public void allOfAsyncExample() {
 		StringBuilder result = new StringBuilder();
@@ -510,18 +667,16 @@ public class CompletedFuturePlaygroud {
 	@Test
 	public void completeAfterCompletionExample(){
 		ExecutorService executor = Executors.newCachedThreadPool();
-		Supplier<String> supplier = () -> {
-
+		Supplier<String> delayedSupplier = () -> {
 			try {
 				Thread.sleep(500);
 			} catch(InterruptedException e) {
 				e.printStackTrace();
 			}
-
 			return Thread.currentThread().getName();
 		};
 
-		CompletableFuture<String> cf = supplyAsync(supplier, executor);
+		CompletableFuture<String> cf = supplyAsync(delayedSupplier, executor);
 		String result = cf.join();
 
 		System.out.println("Running " + result);
@@ -538,8 +693,7 @@ public class CompletedFuturePlaygroud {
 	@Test
 	public void completeBeforeCompletionExample(){
 		ExecutorService executor = Executors.newCachedThreadPool();
-		Supplier<String> supplier = () -> {
-
+		Supplier<String> delayedSupplier = () -> {
 			try {
 				Thread.sleep(500);
 			} catch(InterruptedException e) {
@@ -549,19 +703,17 @@ public class CompletedFuturePlaygroud {
 			return Thread.currentThread().getName();
 		};
 
-		CompletableFuture<String> cf = supplyAsync(supplier, executor);
+		CompletableFuture<String> cf = supplyAsync(delayedSupplier, executor);
 
 		cf.complete("Tool long");
 
-
 		String result = cf.join();
 
-		System.out.println("Running " + result);
-
+		assertEquals("Tool long", result);
 
 		String result2 = cf.join();
 
-		System.out.println("Running " + result2);
+		assertEquals("Tool long", result2);
 
 		executor.shutdown();
 	}
@@ -569,18 +721,16 @@ public class CompletedFuturePlaygroud {
 	@Test
 	public void obtrudeValueExample(){
 		ExecutorService executor = Executors.newCachedThreadPool();
-		Supplier<String> supplier = () -> {
-
+		Supplier<String> delayedSupplier = () -> {
 			try {
 				Thread.sleep(500);
 			} catch(InterruptedException e) {
 				e.printStackTrace();
 			}
-
 			return Thread.currentThread().getName();
 		};
 
-		CompletableFuture<String> cf = supplyAsync(supplier, executor);
+		CompletableFuture<String> cf = supplyAsync(delayedSupplier, executor);
 
 		String result = cf.join();
 
@@ -590,7 +740,7 @@ public class CompletedFuturePlaygroud {
 
 		String result2 = cf.join();
 
-		System.out.println("Running " + result2);
+		assertEquals("Tool long", result2);
 
 		executor.shutdown();
 	}
@@ -608,11 +758,9 @@ public class CompletedFuturePlaygroud {
 				.applyToEither(cf4, Function.identity());
 
 		upstreams.thenAccept(System.out::println).join();// print "foo"
-
-
 	}
 	@Test
-	public void Two_to_One_Selecting_Patterns2() throws InterruptedException {
+	public void Two_to_One_Selecting_Patterns2() {
 		CompletableFuture<String> cf1 = supplyAsync(blocked(String.class));
 		CompletableFuture<String> cf2 = supplyAsync(returnValueLater("bar"));
 		CompletableFuture<String> cf3 = supplyAsync(blocked(String.class));
@@ -626,7 +774,6 @@ public class CompletedFuturePlaygroud {
 		upstreams.thenAccept(System.out::println).join();// print "foo"
 	}
 
-	
 	private <T> Supplier<T> returnValue(T value) {
 		return returnValue(() -> value);
 	}
